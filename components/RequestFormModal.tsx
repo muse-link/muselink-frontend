@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MusicRequest, MusicGenre, User } from '../types';
 import { X, Wand2, Loader2 } from 'lucide-react';
 import { enhanceDescription } from '../services/geminiService';
+const API_URL = import.meta.env.VITE_BACKEND_URL || "https://muselink-backend-vzka.onrender.com";
+
 
 interface RequestFormModalProps {
   isOpen: boolean;
@@ -49,14 +51,46 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({
     setIsEnhancing(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  try {
+    // 1. Lo que el backend espera
+    const payload = {
+      cliente_id: user.id,          // va a solicitudes.cliente_id
+      titulo: title,
+      descripcion: description,
+      tipo_musica: genre,
+      cantidad_ofertas: maxOffers,
+      // fecha_evento por ahora va como NULL en el backend
+    };
+
+    // 2. Llamada al backend
+    const resp = await fetch(`${API_URL}/solicitudes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      console.error("Error creando solicitud:", await resp.text());
+      alert("Hubo un problema al crear la solicitud 😢");
+      return;
+    }
+
+    // Opcional: leer lo que devuelve el backend
+    // const saved = await resp.json();
+    // console.log("Solicitud guardada en BD:", saved);
+
+    // 3. Seguimos usando onSave para actualizar la UI local
     onSave({
       clientId: user.id,
-      clientName: user.name,
+      clientName: contactName,
       clientContact: {
-        email: user.email,
-        phone: user.phone || 'No se proporcionó teléfono'
+        email: contactEmail,
+        phone: contactPhone || 'No se proporcionó teléfono'
       },
       title,
       genre,
@@ -64,8 +98,21 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({
       budget,
       maxOffers,
     });
+
     onClose();
-  };
+  } catch (err) {
+    console.error("Error de red creando solicitud:", err);
+    alert("No se pudo conectar con el servidor 😢");
+  }
+};
+
+
+
+
+
+
+
+
 
   if (!isOpen) return null;
 
