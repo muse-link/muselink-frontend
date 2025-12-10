@@ -15,10 +15,14 @@ const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://muselink-backend-vz
 // =========================
 function mapRolIdToRole(rol_id: number): 'client' | 'artist' | 'admin' {
   switch (rol_id) {
-    case 1: return 'client';
-    case 2: return 'artist';
-    case 3: return 'admin';
-    default: return 'client';
+    case 1:
+      return 'admin';     // rol_id 1 → admin
+    case 2:
+      return 'artist';    // rol_id 2 → artista
+    case 3:
+      return 'client';    // rol_id 3 → cliente
+    default:
+      return 'client';
   }
 }
 
