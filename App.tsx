@@ -10,6 +10,8 @@ import { Music, ArrowRight, Lock } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://muselink-backend-vzka.onrender.com';
 
+
+
 // =========================
 // MAPEO CORRECTO DE ROLES
 // =========================
