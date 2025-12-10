@@ -1,155 +1,260 @@
-import React, { useEffect, useState } from "react";
-import { MusicRequest, User } from "../types";
-import { Lock, Unlock, CreditCard } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User } from "../types";
+import {
+  Search,
+  Filter,
+  LockOpen,
+  Lock,
+  Loader2,
+  Calendar,
+  DollarSign,
+  Music,
+} from "lucide-react";
 
 const API_URL =
   import.meta.env.VITE_BACKEND_URL ||
   "https://muselink-backend-vzka.onrender.com";
 
-interface ArtistDashboardProps {
-  user: User;
+interface Solicitud {
+  id: number;
+  cliente_id: number;
+  titulo: string;
+  descripcion: string;
+  tipo_musica: string;
+  fecha_evento: string | null;
+  cantidad_ofertas: number;
+  estado: string;
+  fecha_creacion: string;
+  desbloqueos?: number;
 }
 
-export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({ user }) => {
-  const [requests, setRequests] = useState<MusicRequest[]>([]);
+interface ArtistDashboardProps {
+  user: User;
+  onUpdateUser: (u: User) => void;
+}
+
+export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
+  user,
+  onUpdateUser,
+}) => {
+  const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unlocking, setUnlocking] = useState<number | null>(null);
+  const [unlockLoading, setUnlockLoading] = useState<number | null>(null);
 
-  // ================================
-  // 🔥 Cargar solicitudes desde backend
-  // ================================
-  const loadRequests = async () => {
-    try {
-      const res = await fetch(`${API_URL}/solicitudes`);
-      if (!res.ok) {
-        console.error("Error cargando solicitudes:", await res.text());
-        return;
-      }
-
-      const data = await res.json();
-      setRequests(data); // ← solicitudes reales desde PostgreSQL
-    } catch (err) {
-      console.error("Error de red:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // filtros
+  const [search, setSearch] = useState("");
+  const [genreFilter, setGenreFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
 
   useEffect(() => {
-    loadRequests();
+    loadSolicitudes();
   }, []);
 
-  // ================================
-  // 🔓 Desbloquear solicitud
-  // ================================
-  const unlockRequest = async (requestId: number) => {
+  /** ========================================
+   *  🔥 CARGAR SOLICITUDES DESDE EL BACKEND
+   * ======================================== */
+  const loadSolicitudes = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`${API_URL}/solicitudes`);
+      const data = await resp.json();
+
+      setSolicitudes(data);
+    } catch (err) {
+      console.error("Error cargando solicitudes:", err);
+      alert("Error cargando solicitudes desde el servidor");
+    }
+    setLoading(false);
+  };
+
+  /** ========================================
+   *   🔥 DESBLOQUEAR UNA SOLICITUD
+   * ======================================== */
+  const desbloquear = async (solicitudId: number) => {
     if (user.credits <= 0) {
-      alert("No tienes créditos disponibles 😢");
+      alert("No tienes créditos suficientes para desbloquear esta solicitud.");
       return;
     }
 
-    setUnlocking(requestId);
+    setUnlockLoading(solicitudId);
 
     try {
-      const res = await fetch(`${API_URL}/solicitudes/${requestId}/unlock`, {
+      const resp = await fetch(`${API_URL}/solicitudes/desbloquear`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist_id: user.id }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          artista_id: user.id,
+          solicitud_id: solicitudId,
+        }),
       });
 
-      if (!res.ok) {
-        alert(
-          "Fallo al desbloquear. Es posible que se haya alcanzado el máximo de ofertas o ya lo hayas desbloqueado."
-        );
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("Error al desbloquear:", errText);
+        alert("Error al desbloquear solicitud.");
+        setUnlockLoading(null);
         return;
       }
 
-      alert("Solicitud desbloqueada correctamente 🎉");
+      const data = await resp.json();
 
-      loadRequests(); // refrescar solicitudes
-    } catch (err) {
-      console.error("Error desbloqueando:", err);
-      alert("Error de conexión.");
-    } finally {
-      setUnlocking(null);
+      // Actualizar créditos del artista
+      onUpdateUser({
+        ...user,
+        credits: data.nuevosCreditos,
+      });
+
+      // Recargar solicitudes
+      await loadSolicitudes();
+    } catch (e) {
+      console.error("Error en red desbloqueando:", e);
+      alert("Error al conectar con el servidor.");
     }
+
+    setUnlockLoading(null);
   };
 
-  // ================================
-  // 🖼 Renderizar interfaz
-  // ================================
-  if (loading)
-    return (
-      <div className="text-center text-slate-300 mt-20">
-        Cargando solicitudes...
-      </div>
+  /** ========================================
+   *   🔍 FILTROS LOCALES
+   * ======================================== */
+
+  const filtered = solicitudes
+    .filter((s) => s.estado === "abierta")
+    .filter((s) =>
+      search ? s.titulo.toLowerCase().includes(search.toLowerCase()) : true
+    )
+    .filter((s) => (genreFilter ? s.tipo_musica === genreFilter : true))
+    .sort((a, b) =>
+      sortOrder === "newest"
+        ? new Date(b.fecha_creacion).getTime() -
+          new Date(a.fecha_creacion).getTime()
+        : new Date(a.fecha_creacion).getTime() -
+          new Date(b.fecha_creacion).getTime()
     );
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="bg-surface border border-slate-700 rounded-xl p-6">
-        <h2 className="text-2xl font-bold text-white">
-          Bienvenido/a, {user.name} 👋
-        </h2>
-        <p className="text-slate-400 mt-1">
-          Aquí puedes ver solicitudes creadas por clientes y desbloquearlas para
-          acceder a sus datos de contacto.
-        </p>
-
-        <div className="mt-4 text-yellow-300 flex items-center gap-2">
-          <CreditCard className="w-5 h-5" /> {user.credits} Créditos
+    <div className="space-y-6">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+        <h2 className="text-3xl font-bold text-white">Solicitudes Disponibles</h2>
+        <div className="px-4 py-2 bg-slate-800 text-white rounded-lg">
+          Créditos: {user.credits}
         </div>
       </div>
 
-      {/* LISTA DE SOLICITUDES */}
-      <div className="space-y-4">
-        {requests.length === 0 ? (
-          <p className="text-slate-400">No hay solicitudes disponibles aún.</p>
-        ) : (
-          requests.map((req) => (
-            <div
-              key={req.id}
-              className="bg-surface border border-slate-700 p-5 rounded-xl flex flex-col gap-2"
-            >
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white">{req.titulo}</h3>
+      {/* 🔍 Filtros */}
+      <div className="bg-surface border border-slate-700 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-2">
+          <Search className="w-5 h-5 text-slate-400 mr-2" />
+          <input
+            placeholder="Buscar..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="bg-transparent outline-none text-white w-full"
+          />
+        </div>
 
-                <span className="text-sm text-slate-400">
-                  {new Date(req.fecha_creacion).toLocaleDateString()}
-                </span>
-              </div>
+        <select
+          value={genreFilter}
+          onChange={(e) => setGenreFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+        >
+          <option value="">Todos los géneros</option>
+          <option value="Pop">Pop</option>
+          <option value="Rock">Rock</option>
+          <option value="Latina">Latina</option>
+          <option value="Cumbia">Cumbia</option>
+          <option value="Jazz">Jazz</option>
+        </select>
 
-              <p className="text-slate-300">{req.descripcion}</p>
-
-              <div className="text-slate-400 text-sm">
-                <strong>Género:</strong> {req.tipo_musica}
-              </div>
-
-              <div className="text-green-400 font-bold text-lg">
-                ${req.budget ?? 100}
-              </div>
-
-              {/* Botón Desbloquear */}
-              <button
-                disabled={unlocking === req.id}
-                onClick={() => unlockRequest(req.id)}
-                className="mt-3 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-white flex items-center gap-2"
-              >
-                {unlocking === req.id ? (
-                  <>
-                    <Unlock className="animate-pulse" />
-                    Desbloqueando...
-                  </>
-                ) : (
-                  <>
-                    <Lock /> Desbloquear (1 Crédito)
-                  </>
-                )}
-              </button>
-            </div>
-          ))
-        )}
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+        >
+          <option value="newest">Más recientes</option>
+          <option value="oldest">Más antiguas</option>
+        </select>
       </div>
+
+      {/* 🔥 LISTADO DE SOLICITUDES */}
+      {loading ? (
+        <div className="text-white text-center py-10">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="text-slate-400 text-center py-10">
+          No hay solicitudes disponibles.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filtered.map((s) => {
+            const desbloqueos = s.desbloqueos || 0;
+            const cuposRestantes = s.cantidad_ofertas - desbloqueos;
+            const agotado = cuposRestantes <= 0;
+
+            return (
+              <div
+                key={s.id}
+                className="bg-surface border border-slate-700 rounded-xl p-6 space-y-3"
+              >
+                <h3 className="text-xl font-bold text-white">{s.titulo}</h3>
+
+                <div className="text-slate-400 text-sm whitespace-pre-line">
+                  {s.descripcion}
+                </div>
+
+                <div className="flex items-center text-slate-300 text-sm">
+                  <Music className="w-4 h-4 mr-1 text-purple-400" />
+                  {s.tipo_musica}
+                </div>
+
+                <div className="text-slate-300 text-sm flex items-center">
+                  <Calendar className="w-4 h-4 mr-1 text-blue-400" />
+                  {s.fecha_evento ? s.fecha_evento : "Sin fecha"}
+                </div>
+
+                <div className="text-slate-300 text-sm flex items-center">
+                  <DollarSign className="w-4 h-4 mr-1 text-green-400" />
+                  Presupuesto variable
+                </div>
+
+                <div className="text-sm text-slate-400">
+                  Ofertas restantes:{" "}
+                  <span
+                    className={
+                      agotado ? "text-red-400 font-bold" : "text-green-400"
+                    }
+                  >
+                    {cuposRestantes}
+                  </span>
+                </div>
+
+                {/* Botón desbloquear */}
+                <button
+                  disabled={unlockLoading === s.id || agotado}
+                  onClick={() => desbloquear(s.id)}
+                  className={`w-full mt-3 py-2 rounded-lg font-bold flex justify-center items-center transition-all ${
+                    agotado
+                      ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+                      : "bg-primary hover:bg-violet-600 text-white"
+                  }`}
+                >
+                  {unlockLoading === s.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <LockOpen className="w-5 h-5 mr-2" />
+                      Desbloquear contacto
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
