@@ -55,17 +55,17 @@ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
 
   try {
-    // 1. Lo que el backend espera
+    // 1. Payload EXACTO que espera tu backend PostgreSQL
     const payload = {
-      cliente_id: user.id,          // va a solicitudes.cliente_id
+      cliente_id: user.id,
       titulo: title,
       descripcion: description,
       tipo_musica: genre,
       cantidad_ofertas: maxOffers,
-      // fecha_evento por ahora va como NULL en el backend
+      presupuesto: budget
     };
 
-    // 2. Llamada al backend
+    // 2. POST al backend
     const resp = await fetch(`${API_URL}/solicitudes`, {
       method: "POST",
       headers: {
@@ -80,18 +80,11 @@ const handleSubmit = async (e: React.FormEvent) => {
       return;
     }
 
-    // Opcional: leer lo que devuelve el backend
-    // const saved = await resp.json();
-    // console.log("Solicitud guardada en BD:", saved);
+    const saved = await resp.json(); // ← recibimos lo que guardó el backend
 
-    // 3. Seguimos usando onSave para actualizar la UI local
+    // 3. Actualiza UI local sin variables inexistentes
     onSave({
       clientId: user.id,
-      clientName: contactName,
-      clientContact: {
-        email: contactEmail,
-        phone: contactPhone || 'No se proporcionó teléfono'
-      },
       title,
       genre,
       description,
@@ -100,12 +93,12 @@ const handleSubmit = async (e: React.FormEvent) => {
     });
 
     onClose();
+    
   } catch (err) {
     console.error("Error de red creando solicitud:", err);
     alert("No se pudo conectar con el servidor 😢");
   }
 };
-
 
 
 
