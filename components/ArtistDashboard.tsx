@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 import { User } from "../types";
 import {
   Search,
-  Filter,
   LockOpen,
-  Lock,
   Loader2,
   Calendar,
   DollarSign,
@@ -48,6 +46,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
 
   useEffect(() => {
     loadSolicitudes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** ========================================
@@ -57,8 +56,14 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
     setLoading(true);
     try {
       const resp = await fetch(`${API_URL}/solicitudes`);
-      const data = await resp.json();
+      if (!resp.ok) {
+        console.error("Error HTTP al cargar solicitudes:", await resp.text());
+        alert("Error cargando solicitudes desde el servidor");
+        setLoading(false);
+        return;
+      }
 
+      const data = await resp.json();
       setSolicitudes(data);
     } catch (err) {
       console.error("Error cargando solicitudes:", err);
@@ -98,15 +103,13 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         return;
       }
 
-      const data = await resp.json();
-
-      // Actualizar créditos del artista
+      // Descontamos 1 crédito localmente
       onUpdateUser({
         ...user,
-        credits: data.nuevosCreditos,
+        credits: user.credits - 1,
       });
 
-      // Recargar solicitudes
+      // Recargar solicitudes para reflejar cupos/desbloqueos
       await loadSolicitudes();
     } catch (e) {
       console.error("Error en red desbloqueando:", e);
@@ -119,7 +122,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   /** ========================================
    *   🔍 FILTROS LOCALES
    * ======================================== */
-
   const filtered = solicitudes
     .filter((s) => s.estado === "abierta")
     .filter((s) =>
@@ -136,6 +138,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center border-b border-slate-700 pb-4">
         <h2 className="text-3xl font-bold text-white">Solicitudes Disponibles</h2>
         <div className="px-4 py-2 bg-slate-800 text-white rounded-lg">
