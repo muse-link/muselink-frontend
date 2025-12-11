@@ -1,158 +1,173 @@
-import React, { useState, useEffect } from "react";
-import { HashRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Layout } from "./components/Layout";
-import { ClientDashboard } from "./components/ClientDashboard";
-import { ArtistDashboard } from "./components/ArtistDashboard";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { getSessionUser, setSessionUser } from "./services/storage";
-import { User } from "./types";
-import { Music, ArrowRight, Lock } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ClientDashboard } from './components/ClientDashboard';
+import { ArtistDashboard } from './components/ArtistDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
+import { getSessionUser, setSessionUser } from './services/storage';
+import { User } from './types';
+import { Music, ArrowRight, Lock } from 'lucide-react';
 
-// URL del backend
-const API_URL =
-  import.meta.env.VITE_BACKEND_URL ||
-  "https://muselink-backend-vzka.onrender.com";
+// 👉 URL del backend (usa la env si existe, si no, la de Render)
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://muselink-backend-vzka.onrender.com';
 
-type BackendUser = {
-  id: number;
-  nombre: string;
-  email: string;
-  rol_id: number;
-  credits?: number;
-};
-
-// 👉 AQUÍ EL MAPEO CORRECTO SEGÚN TU TABLA ROLES
-function mapRolIdToRole(rol_id: number): "client" | "artist" | "admin" {
+// Mapea el rol de la BD (rol_id) a lo que usa el frontend
+// En tu tabla roles:
+// 1 = admin, 2 = artista, 3 = cliente
+function mapRolIdToRole(rol_id: number): 'client' | 'artist' | 'admin' {
   switch (rol_id) {
     case 1:
-      return "admin"; // id 1 => admin
+      return 'admin';
     case 2:
-      return "artist"; // id 2 => artista
+      return 'artist';
     case 3:
-      return "client"; // id 3 => cliente
+      return 'client';
     default:
-      return "client";
+      return 'client';
   }
 }
 
-// =======================
-// LOGIN + REGISTRO
-// =======================
+// -------------------------------------------
+//  Login / Registro
+// -------------------------------------------
 const LoginScreen: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
-  const [role, setRole] = useState<"client" | "artist">("client"); // SOLO client/artist
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<'client' | 'artist' | 'admin'>('client');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-
-  const resetForm = () => {
-    setName("");
-    setEmail("");
-    setPassword("");
-    setPhone("");
-  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
       if (isRegistering) {
-        // -------- REGISTRO --------
+        // =============== REGISTRO ==================
         if (!password || password.length < 3) {
-          alert("La contraseña debe tener al menos 3 caracteres.");
+          alert('La contraseña debe tener al menos 3 caracteres.');
           return;
         }
-        if (role === "client" && !phone) {
-          alert("El teléfono es obligatorio para clientes.");
+        if (role === 'client' && !phone) {
+          alert('El número de teléfono es obligatorio para los clientes para que los artistas puedan contactarte.');
+          return;
+        }
+        if (role === 'admin') {
+          alert('No se pueden registrar administradores desde la interfaz pública.');
           return;
         }
 
-        // backendRole en español según tu tabla: admin, artista, cliente
-        const backendRole = role === "client" ? "cliente" : "artista";
+        // role del backend en español
+        const backendRole = role === 'client' ? 'cliente' : 'artista';
 
         const resp = await fetch(`${API_URL}/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: name,
             email,
             password,
             role: backendRole,
+            telefono: phone || null,
           }),
         });
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          alert(err.error || "Error al registrarse");
+          alert(err.error || 'Error al registrarse');
           return;
         }
 
         const data = await resp.json();
-        const apiUser = data.user as BackendUser;
 
+        // Guarda token (para rutas protegidas futuras)
         if (data.token) {
-          localStorage.setItem("authToken", data.token);
+          localStorage.setItem('authToken', data.token);
         }
 
-        const mappedRole = mapRolIdToRole(apiUser.rol_id);
+        const apiUser = data.user;
 
+        // 👇 ADAPTAMOS AL TIPO User DEL FRONT
         const newUser: User = {
           id: String(apiUser.id),
           name: apiUser.nombre,
           email: apiUser.email,
-          role: mappedRole,
-          phone: role === "client" ? phone : undefined,
-          credits: mappedRole === "artist" ? 3 : 0,
-          password: "",
+          role: mapRolIdToRole(apiUser.rol_id),
+          phone: phone || apiUser.telefono || undefined,
+          // Si el backend ya devuelve credits, usamos eso.
+          // Si no, fallback: artistas empiezan con 3 créditos, clientes con 0.
+          credits:
+            typeof apiUser.credits === 'number'
+              ? apiUser.credits
+              : role === 'artist'
+              ? 3
+              : 0,
+          password: '',
         };
 
         onLogin(newUser);
-        resetForm();
       } else {
-        // -------- LOGIN --------
+        // =============== LOGIN ==================
         const resp = await fetch(`${API_URL}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
         });
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          alert(err.error || "Usuario o contraseña incorrectos");
+          alert(err.error || 'Usuario o contraseña incorrectos');
           return;
         }
 
         const data = await resp.json();
-        const apiUser = data.user as BackendUser;
 
         if (data.token) {
-          localStorage.setItem("authToken", data.token);
+          localStorage.setItem('authToken', data.token);
         }
 
-        const mappedRole = mapRolIdToRole(apiUser.rol_id);
+        const apiUser = data.user;
 
         const loggedUser: User = {
           id: String(apiUser.id),
           name: apiUser.nombre,
           email: apiUser.email,
-          role: mappedRole, // ¡SOLO backend decide el rol!
-          phone: undefined,
-          credits: mappedRole === "artist" ? 3 : 0,
-          password: "",
+          role: mapRolIdToRole(apiUser.rol_id),
+          // si el backend devuelve telefono, lo usamos
+          phone: apiUser.telefono || undefined,
+          // 👇 AQUÍ ESTÁ LA CLAVE: USAR COLUMNA credits DE LA BD
+          credits:
+            typeof apiUser.credits === 'number'
+              ? apiUser.credits
+              : 0,
+          password: '',
         };
 
         onLogin(loggedUser);
-        resetForm();
       }
     } catch (error) {
-      console.error("Error en auth:", error);
-      alert("No se pudo conectar con el servidor.");
+      console.error('Error en auth:', error);
+      alert('No se pudo conectar con el servidor. Revisa el backend.');
     }
   };
 
+  const toggleMode = () => {
+    setIsRegistering(!isRegistering);
+    setName('');
+    setEmail('');
+    setPassword('');
+    setPhone('');
+    if (role === 'admin') setRole('client');
+  };
+
   return (
-    <div className="min-h-screen bg-dark flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-dark flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 -left-20 w-96 h-96 bg-primary/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-secondary/20 rounded-full blur-3xl"></div>
+      </div>
+
       <div className="relative z-10 w-full max-w-md bg-surface/50 backdrop-blur-lg border border-slate-700 p-8 rounded-2xl shadow-2xl">
         <div className="flex justify-center mb-6">
           <div className="bg-gradient-to-br from-primary to-secondary p-3 rounded-xl shadow-lg">
@@ -161,63 +176,71 @@ const LoginScreen: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
         </div>
 
         <h2 className="text-3xl font-bold text-center text-white mb-2">
-          {isRegistering ? "Únete a MuseLink" : "Bienvenido de nuevo"}
+          {isRegistering ? 'Únete a MuseLink' : 'Bienvenido de nuevo'}
         </h2>
         <p className="text-center text-slate-400 mb-8">
           La mejor plataforma para talento musical.
         </p>
 
-        {/* Selector de tipo de cuenta */}
-        <div className="flex bg-slate-900 p-1 rounded-lg mb-6">
-          <button
-            type="button"
-            className={`flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-md transition-all ${
-              role === "client"
-                ? "bg-secondary text-white"
-                : "text-slate-400 hover:text-white"
-            }`}
-            onClick={() => setRole("client")}
-          >
-            Cliente
-          </button>
-          <button
-            type="button"
-            className={`flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-md transition-all ${
-              role === "artist"
-                ? "bg-primary text-white"
-                : "text-slate-400 hover:text-white"
-            }`}
-            onClick={() => setRole("artist")}
-          >
-            Artista
-          </button>
-        </div>
-
         <form onSubmit={handleAuth} className="space-y-4">
+          <div className="flex bg-slate-900 p-1 rounded-lg mb-6 overflow-x-auto">
+            <button
+              type="button"
+              className={`flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                role === 'client' ? 'bg-secondary text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setRole('client');
+                if (isRegistering && role === 'admin') setIsRegistering(false);
+              }}
+            >
+              Cliente
+            </button>
+            <button
+              type="button"
+              className={`flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                role === 'artist' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setRole('artist');
+                if (isRegistering && role === 'admin') setIsRegistering(false);
+              }}
+            >
+              Artista
+            </button>
+            {!isRegistering && (
+              <button
+                type="button"
+                className={`flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                  role === 'admin' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+                onClick={() => setRole('admin')}
+              >
+                Admin
+              </button>
+            )}
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Correo Electrónico
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Correo Electrónico</label>
             <input
               type="email"
               required
               className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-secondary outline-none"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
               placeholder="tu@ejemplo.com"
             />
           </div>
 
           <div className="relative">
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Contraseña
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña</label>
             <input
               type="password"
               required
               className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-secondary outline-none"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               placeholder="******"
             />
             <Lock className="absolute right-3 top-9 w-4 h-4 text-slate-500" />
@@ -225,33 +248,34 @@ const LoginScreen: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           {isRegistering && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Nombre Completo
-                </label>
+              <div className="animate-in fade-in slide-in-from-top-4">
+                <label className="block text-sm font-medium text-slate-300 mb-1">Nombre Completo</label>
                 <input
                   type="text"
                   required
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-secondary outline-none"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={e => setName(e.target.value)}
                   placeholder="Juan Pérez"
                 />
               </div>
 
-              {role === "client" && (
-                <div>
+              {role === 'client' && (
+                <div className="animate-in fade-in slide-in-from-top-4">
                   <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Teléfono
+                    Teléfono <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="tel"
                     required
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-secondary outline-none"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={e => setPhone(e.target.value)}
                     placeholder="+56 9 1234 5678"
                   />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Requerido para que los artistas te contacten.
+                  </p>
                 </div>
               )}
             </>
@@ -259,41 +283,49 @@ const LoginScreen: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-lg font-bold text-white shadow-lg transform active:scale-95 transition-all mt-6 bg-secondary hover:bg-cyan-400"
+            className={`w-full py-3 rounded-lg font-bold text-white shadow-lg transform active:scale-95 transition-all mt-6 
+              ${
+                role === 'client'
+                  ? 'bg-secondary hover:bg-cyan-400'
+                  : role === 'artist'
+                  ? 'bg-primary hover:bg-violet-500'
+                  : 'bg-slate-600 hover:bg-slate-500'
+              }`}
           >
-            {isRegistering ? "Crear Cuenta" : "Iniciar Sesión"}{" "}
+            {isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}{' '}
             <ArrowRight className="inline-block w-4 h-4 ml-1" />
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              resetForm();
-            }}
-            className="text-sm text-slate-400 hover:text-white underline"
-          >
-            {isRegistering
-              ? "¿Ya tienes cuenta? Inicia Sesión"
-              : "¿Nuevo en MuseLink? Regístrate"}
+          <button onClick={toggleMode} className="text-sm text-slate-400 hover:text-white underline">
+            {isRegistering ? '¿Ya tienes cuenta? Inicia Sesión' : '¿Nuevo en MuseLink? Regístrate'}
           </button>
         </div>
       </div>
+
+      {!isRegistering && (
+        <div className="mt-8 text-xs text-slate-500 bg-black/40 p-4 rounded-lg border border-slate-800">
+          <p className="font-bold mb-1">Ahora el login usa tu backend real ✨</p>
+          <p>Puedes registrar clientes y artistas, y luego iniciar sesión con ese correo y contraseña.</p>
+        </div>
+      )}
     </div>
   );
 };
 
-// =======================
-// APP PRINCIPAL
-// =======================
+// -------------------------------------------
+//  Main App
+// -------------------------------------------
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const session = getSessionUser();
-    if (session) setUser(session);
+    if (session) {
+      setUser(session);
+    }
     setIsLoading(false);
   }, []);
 
@@ -305,46 +337,52 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setSessionUser(null);
     setUser(null);
-    localStorage.removeItem("authToken");
+    localStorage.removeItem('authToken');
   };
 
-  if (isLoading) {
+  const handleUpdateUser = (u: User) => {
+    setSessionUser(u);
+    setUser(u);
+  };
+
+  if (isLoading)
     return (
       <div className="min-h-screen bg-dark flex items-center justify-center text-white">
         Cargando...
       </div>
     );
-  }
-
-  if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
 
   const renderDashboard = () => {
+    if (!user) return <Navigate to="/" />;
     switch (user.role) {
-      case "client":
+      case 'client':
         return <ClientDashboard user={user} />;
-      case "artist":
-        return <ArtistDashboard user={user} onUpdateUser={setUser} />;
-      case "admin":
+      case 'artist':
+        return <ArtistDashboard user={user} onUpdateUser={handleUpdateUser} />;
+      case 'admin':
         return <AdminDashboard />;
       default:
-        return <ClientDashboard user={user} />;
+        return <Navigate to="/" />;
     }
   };
 
   return (
     <Router>
-      <Layout user={user} onLogout={handleLogout}>
-        <Routes>
-          <Route path="/" element={renderDashboard()} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </Layout>
+      {!user ? (
+        <LoginScreen onLogin={handleLogin} />
+      ) : (
+        <Layout user={user} onLogout={handleLogout}>
+          <Routes>
+            <Route path="/" element={renderDashboard()} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </Layout>
+      )}
     </Router>
   );
 };
 
 export default App;
+
 
 
