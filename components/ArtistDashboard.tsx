@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import { User } from "../types";
 import {
   Search,
-  LockOpen,
   Loader2,
   Calendar,
   DollarSign,
   Music,
+  LockOpen,
 } from "lucide-react";
 
 const API_URL =
@@ -23,7 +23,7 @@ interface Solicitud {
   cantidad_ofertas: number;
   estado: string;
   fecha_creacion: string;
-  desbloqueos?: number;
+  desbloqueos: number; // conteo que viene desde el backend
 }
 
 interface ArtistDashboardProps {
@@ -46,35 +46,29 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
 
   useEffect(() => {
     loadSolicitudes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** ========================================
-   *  🔥 CARGAR SOLICITUDES DESDE EL BACKEND
-   * ======================================== */
+  // =====================================================
+  // 🔥 CARGAR SOLICITUDES DESDE EL BACKEND
+  // =====================================================
   const loadSolicitudes = async () => {
     setLoading(true);
     try {
       const resp = await fetch(`${API_URL}/solicitudes`);
-      if (!resp.ok) {
-        console.error("Error HTTP al cargar solicitudes:", await resp.text());
-        alert("Error cargando solicitudes desde el servidor");
-        setLoading(false);
-        return;
-      }
+      if (!resp.ok) throw new Error("HTTP error");
 
       const data = await resp.json();
       setSolicitudes(data);
     } catch (err) {
       console.error("Error cargando solicitudes:", err);
-      alert("Error cargando solicitudes desde el servidor");
+      alert("No se pudieron cargar las solicitudes desde el servidor");
     }
     setLoading(false);
   };
 
-  /** ========================================
-   *   🔥 DESBLOQUEAR UNA SOLICITUD
-   * ======================================== */
+  // =====================================================
+  // 🔥 DESBLOQUEAR CONTACTO (consume crédito)
+  // =====================================================
   const desbloquear = async (solicitudId: number) => {
     if (user.credits <= 0) {
       alert("No tienes créditos suficientes para desbloquear esta solicitud.");
@@ -96,34 +90,33 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
       });
 
       if (!resp.ok) {
-        const errText = await resp.text();
-        console.error("Error al desbloquear:", errText);
-        alert("Error al desbloquear solicitud.");
+        const e = await resp.text();
+        alert("Error al desbloquear: " + e);
         setUnlockLoading(null);
         return;
       }
 
-      // Descontamos 1 crédito localmente
+      const data = await resp.json();
+
       onUpdateUser({
         ...user,
-        credits: user.credits - 1,
+        credits: data.nuevosCreditos,
       });
 
-      // Recargar solicitudes para reflejar cupos/desbloqueos
       await loadSolicitudes();
-    } catch (e) {
-      console.error("Error en red desbloqueando:", e);
-      alert("Error al conectar con el servidor.");
+    } catch (err) {
+      console.error("Error desbloqueando:", err);
+      alert("Error en la conexión al servidor.");
     }
 
     setUnlockLoading(null);
   };
 
-  /** ========================================
-   *   🔍 FILTROS LOCALES
-   * ======================================== */
+  // =====================================================
+  // 🔍 APLICAR FILTROS
+  // =====================================================
   const filtered = solicitudes
-    .filter((s) => s.estado === "abierta")
+    .filter((s) => s.estado === "abierta") // solo abiertas
     .filter((s) =>
       search ? s.titulo.toLowerCase().includes(search.toLowerCase()) : true
     )
@@ -136,9 +129,12 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           new Date(b.fecha_creacion).getTime()
     );
 
+  // =====================================================
+  // 🔥 RENDER
+  // =====================================================
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex justify-between items-center border-b border-slate-700 pb-4">
         <h2 className="text-3xl font-bold text-white">Solicitudes Disponibles</h2>
         <div className="px-4 py-2 bg-slate-800 text-white rounded-lg">
@@ -146,8 +142,9 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         </div>
       </div>
 
-      {/* 🔍 Filtros */}
+      {/* FILTROS */}
       <div className="bg-surface border border-slate-700 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Buscador */}
         <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-2">
           <Search className="w-5 h-5 text-slate-400 mr-2" />
           <input
@@ -158,6 +155,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           />
         </div>
 
+        {/* Género */}
         <select
           value={genreFilter}
           onChange={(e) => setGenreFilter(e.target.value)}
@@ -171,6 +169,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           <option value="Jazz">Jazz</option>
         </select>
 
+        {/* Orden */}
         <select
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value)}
@@ -181,7 +180,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         </select>
       </div>
 
-      {/* 🔥 LISTADO DE SOLICITUDES */}
+      {/* LISTADO */}
       {loading ? (
         <div className="text-white text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin mx-auto" />
@@ -193,8 +192,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filtered.map((s) => {
-            const desbloqueos = s.desbloqueos || 0;
-            const cuposRestantes = s.cantidad_ofertas - desbloqueos;
+            const cuposRestantes = s.cantidad_ofertas - s.desbloqueos;
             const agotado = cuposRestantes <= 0;
 
             return (
@@ -213,12 +211,12 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
                   {s.tipo_musica}
                 </div>
 
-                <div className="text-slate-300 text-sm flex items-center">
+                <div className="flex items-center text-slate-300 text-sm">
                   <Calendar className="w-4 h-4 mr-1 text-blue-400" />
                   {s.fecha_evento ? s.fecha_evento : "Sin fecha"}
                 </div>
 
-                <div className="text-slate-300 text-sm flex items-center">
+                <div className="flex items-center text-slate-300 text-sm">
                   <DollarSign className="w-4 h-4 mr-1 text-green-400" />
                   Presupuesto variable
                 </div>
@@ -234,7 +232,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
                   </span>
                 </div>
 
-                {/* Botón desbloquear */}
+                {/* BOTÓN DESBLOQUEAR */}
                 <button
                   disabled={unlockLoading === s.id || agotado}
                   onClick={() => desbloquear(s.id)}
