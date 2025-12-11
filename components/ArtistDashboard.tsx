@@ -23,7 +23,12 @@ interface Solicitud {
   cantidad_ofertas: number;
   estado: string;
   fecha_creacion: string;
-  desbloqueos?: number; // (si tu GET /solicitudes lo incluye)
+
+  // viene del backend
+  desbloqueos?: number; // COUNT
+  desbloqueada?: boolean; // si este artista ya desbloqueó
+  contact_email?: string | null; // email del cliente (solo útil si desbloqueada=true)
+  contact_phone?: string | null; // por ahora null
 }
 
 type ContactoCliente = {
@@ -50,7 +55,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   const [genreFilter, setGenreFilter] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
-  // ✅ NUEVO: contactos desbloqueados en esta sesión (no rompe tu lógica)
+  // contactos desbloqueados en esta sesión (después de apretar desbloquear)
   const [contactos, setContactos] = useState<Record<number, ContactoCliente>>({});
 
   useEffect(() => {
@@ -59,12 +64,13 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   }, []);
 
   /** ========================================
-   *  🔥 CARGAR SOLICITUDES DESDE EL BACKEND
+   *  🔥 CARGAR SOLICITUDES PARA EL ARTISTA
    * ======================================== */
   const loadSolicitudes = async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${API_URL}/solicitudes`);
+      // ✅ IMPORTANTE: esta ruta YA existe en tu backend
+      const resp = await fetch(`${API_URL}/solicitudes/artista/${user.id}`);
       if (!resp.ok) {
         const t = await resp.text();
         console.error("Error HTTP al cargar solicitudes:", t);
@@ -106,7 +112,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         const errText = await resp.text();
         console.error("Error al desbloquear:", errText);
 
-        // Mensaje amigable desde backend
         try {
           const parsed = JSON.parse(errText);
           alert(parsed.error || "Error al desbloquear solicitud.");
@@ -120,24 +125,24 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
 
       const data = await resp.json();
 
-      // ✅ Mantiene tu lógica: créditos vienen desde el backend/BD
+      // ✅ créditos desde BD
       if (typeof data.nuevosCreditos === "number") {
         onUpdateUser({ ...user, credits: data.nuevosCreditos });
       }
 
-      // ✅ NUEVO: si backend devuelve contacto, lo mostramos en la tarjeta
+      // ✅ guardar contacto devuelto por el backend (POST)
       if (data.contacto) {
         setContactos((prev) => ({
           ...prev,
           [solicitudId]: {
-            nombre: data.contacto.nombre,
+            nombre: data.contacto.nombre || "Cliente",
             email: data.contacto.email,
             telefono: data.contacto.telefono ?? null,
           },
         }));
       }
 
-      // Recargar para actualizar cupos/contadores si aplica
+      // refrescar listado (para que venga desbloqueada=true y/o cupos)
       await loadSolicitudes();
     } catch (e) {
       console.error("Error en red desbloqueando:", e);
@@ -148,7 +153,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   };
 
   /** ========================================
-   *   🔍 FILTRADO + ORDEN (se mantiene)
+   *   🔍 FILTROS LOCALES (se mantienen)
    * ======================================== */
   const filtered = useMemo(() => {
     return solicitudes
@@ -173,7 +178,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         </div>
       </div>
 
-      {/* 🔍 Filtros (se mantienen) */}
+      {/* 🔍 Filtros */}
       <div className="bg-surface border border-slate-700 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-2">
           <Search className="w-5 h-5 text-slate-400 mr-2" />
@@ -208,7 +213,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
         </select>
       </div>
 
-      {/* 🔥 LISTADO */}
+      {/* LISTADO */}
       {loading ? (
         <div className="text-white text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin mx-auto" />
@@ -220,12 +225,20 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filtered.map((s) => {
-            const desbloqueos = s.desbloqueos || 0;
-            const cuposRestantes = s.cantidad_ofertas - desbloqueos;
+            const desbloqueos = Number(s.desbloqueos || 0);
+            const cuposRestantes = Number(s.cantidad_ofertas) - desbloqueos;
             const agotado = cuposRestantes <= 0;
 
-            // ✅ NUEVO: si ya tenemos contacto en memoria, lo mostramos y deshabilitamos
-            const contacto = contactos[s.id];
+            // ✅ contacto por sesión (si recién desbloqueaste)
+            const contactoSesion = contactos[s.id];
+
+            // ✅ contacto por backend (si ya estaba desbloqueada desde antes)
+            const contactoBackend =
+              s.desbloqueada && s.contact_email
+                ? { nombre: "Cliente", email: s.contact_email, telefono: null }
+                : null;
+
+            const contacto = contactoSesion || contactoBackend;
 
             return (
               <div
@@ -256,41 +269,33 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
                 <div className="text-sm text-slate-400">
                   Ofertas restantes:{" "}
                   <span
-                    className={
-                      agotado ? "text-red-400 font-bold" : "text-green-400"
-                    }
+                    className={agotado ? "text-red-400 font-bold" : "text-green-400"}
                   >
                     {cuposRestantes}
                   </span>
                 </div>
 
-                {/* ✅ NUEVO: bloque contacto si ya desbloqueaste */}
+                {/* ✅ CONTACTO */}
                 {contacto && (
                   <div className="mt-3 bg-slate-900 border border-emerald-600 rounded-lg p-3 text-sm text-emerald-100">
                     <div className="flex items-center mb-1">
                       <Info className="w-4 h-4 mr-1 text-emerald-300" />
-                      <span className="font-semibold">
-                        Datos de contacto desbloqueados
-                      </span>
+                      <span className="font-semibold">Datos de contacto desbloqueados</span>
                     </div>
-                    <p>
-                      <span className="font-semibold">Nombre: </span>
-                      {contacto.nombre}
-                    </p>
                     <p>
                       <span className="font-semibold">Email: </span>
                       {contacto.email}
                     </p>
-                    {contacto.telefono && (
+                    {contacto.nombre && (
                       <p>
-                        <span className="font-semibold">Teléfono: </span>
-                        {contacto.telefono}
+                        <span className="font-semibold">Nombre: </span>
+                        {contacto.nombre}
                       </p>
                     )}
                   </div>
                 )}
 
-                {/* Botón desbloquear (misma lógica, solo se deshabilita si ya hay contacto) */}
+                {/* BOTÓN */}
                 <button
                   disabled={unlockLoading === s.id || agotado || !!contacto}
                   onClick={() => desbloquear(s.id)}
@@ -305,9 +310,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
                   ) : (
                     <>
                       <LockOpen className="w-5 h-5 mr-2" />
-                      {contacto
-                        ? "Contacto desbloqueado"
-                        : "Desbloquear contacto (1 Crédito)"}
+                      {contacto ? "Contacto desbloqueado" : "Desbloquear contacto (1 Crédito)"}
                     </>
                   )}
                 </button>
@@ -319,4 +322,3 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
     </div>
   );
 };
-
