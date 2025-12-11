@@ -1,5 +1,11 @@
-export type UserRole = 'client' | 'artist' | 'admin';
+// ========================================================
+// ROLES DEL SISTEMA
+// ========================================================
+export type UserRole = 'cliente' | 'artista' | 'admin';
 
+// ========================================================
+// GÉNEROS MUSICALES
+// ========================================================
 export enum MusicGenre {
   Pop = 'Pop',
   Rock = 'Rock',
@@ -12,47 +18,61 @@ export enum MusicGenre {
   Other = 'Otro'
 }
 
+// ========================================================
+// USUARIO (MATCH 100% BACKEND POSTGRESQL)
+// ========================================================
 export interface User {
-  id: string;
-  name: string;
+  id: number;               // PostgreSQL INTEGER
+  nombre: string;           // En BD se llama "nombre"
   email: string;
-  password?: string; // Security field
   role: UserRole;
-  phone?: string; // Critical for contact
-  credits: number; // For artists
-  bio?: string;
+  phone?: string;
+  credits: number;          // Créditos actuales del artista
 }
 
-export interface MusicRequest {
-  id: string;
-  clientId: string;
-  clientName: string;
-  clientContact: {
-    email: string;
-    phone: string;
-  };
-  title: string;
-  genre: MusicGenre;
-  description: string;
-  budget: number;
-  createdAt: number;
-  
-  // Logic fields
-  maxOffers: number; // How many artists can unlock this
-  unlockedBy: string[]; // Array of Artist IDs who bought the contact
-  status: 'open' | 'closed';
+// ========================================================
+// SOLICITUD REAL DESDE EL BACKEND
+// (Match EXACTO con la tabla solicitudes + desbloqueos)
+// ========================================================
+export interface Solicitud {
+  id: number;
+  cliente_id: number;
+
+  titulo: string;
+  descripcion: string;
+  tipo_musica: string;
+
+  fecha_evento: string | null;
+
+  cantidad_ofertas: number;
+  estado: string;
+
+  fecha_creacion: string;
+
+  desbloqueos: number;     // viene del LEFT JOIN COUNT()
 }
 
+// ========================================================
+// ESTRUCTURA SOLO PARA CREAR SOLICITUD DESDE EL FRONTEND
+// ========================================================
+export interface NewSolicitudPayload {
+  cliente_id: number;
+  titulo: string;
+  descripcion: string;
+  tipo_musica: MusicGenre | string;
+  cantidad_ofertas: number;
+  fecha_evento?: string | null;
+}
+
+// ========================================================
+// TRANSACCIÓN (opcional si luego quieres manejar créditos)
+// ========================================================
 export interface Transaction {
   id: string;
-  userId: string;
+  userId: number;
   userName: string;
-  amount: number; // Credits bought
-  cost: number; // Total money spent
+  amount: number;
+  cost: number;
   date: number;
   invoiceNumber: string;
-}
-
-export interface SystemConfig {
-  creditPrice: number; // Price per single credit
 }
