@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import { User } from "../types";
 import {
   Search,
+  LockOpen,
   Loader2,
   Calendar,
   DollarSign,
   Music,
-  LockOpen,
 } from "lucide-react";
 
 const API_URL =
@@ -23,7 +23,7 @@ interface Solicitud {
   cantidad_ofertas: number;
   estado: string;
   fecha_creacion: string;
-  desbloqueos: number; // conteo que viene desde el backend
+  desbloqueos: number;
 }
 
 interface ArtistDashboardProps {
@@ -39,7 +39,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [unlockLoading, setUnlockLoading] = useState<number | null>(null);
 
-  // filtros
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState("");
   const [sortOrder, setSortOrder] = useState("newest");
@@ -49,25 +48,23 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
   }, []);
 
   // =====================================================
-  // 🔥 CARGAR SOLICITUDES DESDE EL BACKEND
+  // 🔥 CARGAR TODAS LAS SOLICITUDES DISPONIBLES
   // =====================================================
   const loadSolicitudes = async () => {
     setLoading(true);
     try {
       const resp = await fetch(`${API_URL}/solicitudes`);
-      if (!resp.ok) throw new Error("HTTP error");
-
       const data = await resp.json();
       setSolicitudes(data);
     } catch (err) {
       console.error("Error cargando solicitudes:", err);
-      alert("No se pudieron cargar las solicitudes desde el servidor");
+      alert("Error cargando solicitudes desde el servidor.");
     }
     setLoading(false);
   };
 
   // =====================================================
-  // 🔥 DESBLOQUEAR CONTACTO (consume crédito)
+  // 🔐 DESBLOQUEAR UNA SOLICITUD
   // =====================================================
   const desbloquear = async (solicitudId: number) => {
     if (user.credits <= 0) {
@@ -80,9 +77,7 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
     try {
       const resp = await fetch(`${API_URL}/solicitudes/desbloquear`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           artista_id: user.id,
           solicitud_id: solicitudId,
@@ -90,8 +85,9 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
       });
 
       if (!resp.ok) {
-        const e = await resp.text();
-        alert("Error al desbloquear: " + e);
+        const err = await resp.text();
+        console.error("Error desbloqueo:", err);
+        alert("No se pudo desbloquear esta solicitud.");
         setUnlockLoading(null);
         return;
       }
@@ -100,23 +96,23 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
 
       onUpdateUser({
         ...user,
-        credits: data.nuevosCreditos,
+        credits: data.nuevosCreditos, // Los créditos después del desbloqueo
       });
 
-      await loadSolicitudes();
+      loadSolicitudes();
     } catch (err) {
-      console.error("Error desbloqueando:", err);
-      alert("Error en la conexión al servidor.");
+      console.error("Error conectando:", err);
+      alert("Error conectando con el servidor.");
     }
 
     setUnlockLoading(null);
   };
 
   // =====================================================
-  // 🔍 APLICAR FILTROS
+  // 🔎 FILTROS Y ORDEN
   // =====================================================
   const filtered = solicitudes
-    .filter((s) => s.estado === "abierta") // solo abiertas
+    .filter((s) => s.estado === "abierta")
     .filter((s) =>
       search ? s.titulo.toLowerCase().includes(search.toLowerCase()) : true
     )
@@ -129,22 +125,18 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           new Date(b.fecha_creacion).getTime()
     );
 
-  // =====================================================
-  // 🔥 RENDER
-  // =====================================================
   return (
     <div className="space-y-6">
       {/* HEADER */}
       <div className="flex justify-between items-center border-b border-slate-700 pb-4">
         <h2 className="text-3xl font-bold text-white">Solicitudes Disponibles</h2>
-        <div className="px-4 py-2 bg-slate-800 text-white rounded-lg">
+        <div className="px-4 py-2 bg-slate-800 rounded-lg text-white">
           Créditos: {user.credits}
         </div>
       </div>
 
       {/* FILTROS */}
       <div className="bg-surface border border-slate-700 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Buscador */}
         <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-2">
           <Search className="w-5 h-5 text-slate-400 mr-2" />
           <input
@@ -155,7 +147,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           />
         </div>
 
-        {/* Género */}
         <select
           value={genreFilter}
           onChange={(e) => setGenreFilter(e.target.value)}
@@ -169,7 +160,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
           <option value="Jazz">Jazz</option>
         </select>
 
-        {/* Orden */}
         <select
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value)}
@@ -192,31 +182,32 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filtered.map((s) => {
-            const cuposRestantes = s.cantidad_ofertas - s.desbloqueos;
+            const cuposRestantes =
+              s.cantidad_ofertas - (s.desbloqueos || 0);
             const agotado = cuposRestantes <= 0;
 
             return (
               <div
                 key={s.id}
-                className="bg-surface border border-slate-700 rounded-xl p-6 space-y-3"
+                className="bg-surface border border-slate-700 p-6 rounded-xl space-y-3"
               >
                 <h3 className="text-xl font-bold text-white">{s.titulo}</h3>
 
-                <div className="text-slate-400 text-sm whitespace-pre-line">
+                <p className="text-slate-400 text-sm whitespace-pre-line">
                   {s.descripcion}
-                </div>
+                </p>
 
-                <div className="flex items-center text-slate-300 text-sm">
+                <div className="text-slate-300 text-sm flex items-center">
                   <Music className="w-4 h-4 mr-1 text-purple-400" />
                   {s.tipo_musica}
                 </div>
 
-                <div className="flex items-center text-slate-300 text-sm">
+                <div className="text-slate-300 text-sm flex items-center">
                   <Calendar className="w-4 h-4 mr-1 text-blue-400" />
-                  {s.fecha_evento ? s.fecha_evento : "Sin fecha"}
+                  {s.fecha_evento || "Sin fecha"}
                 </div>
 
-                <div className="flex items-center text-slate-300 text-sm">
+                <div className="text-slate-300 text-sm flex items-center">
                   <DollarSign className="w-4 h-4 mr-1 text-green-400" />
                   Presupuesto variable
                 </div>
@@ -232,7 +223,6 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({
                   </span>
                 </div>
 
-                {/* BOTÓN DESBLOQUEAR */}
                 <button
                   disabled={unlockLoading === s.id || agotado}
                   onClick={() => desbloquear(s.id)}
