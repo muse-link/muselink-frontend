@@ -18,6 +18,7 @@ interface Solicitud {
   estado: string;
   fecha_creacion: string;
   desbloqueos?: number;
+  presupuesto?: number | null; // ✅ nuevo
 }
 
 interface ClientDashboardProps {
@@ -28,6 +29,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSolicitud, setEditingSolicitud] = useState<Solicitud | null>(null);
 
   useEffect(() => {
     loadSolicitudes();
@@ -73,7 +75,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
           </p>
         </div>
         <button
-          onClick={() => setIsFormOpen(true)}
+         onClick={() => {
+    setEditingSolicitud(null);
+    setIsFormOpen(true);
+  }}
           className="inline-flex items-center px-4 py-2 rounded-lg bg-primary hover:bg-violet-600 text-white font-semibold shadow-lg transform active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -92,8 +97,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
             de artistas!
           </p>
           <button
-            onClick={() => setIsFormOpen(true)}
-            className="inline-flex items-center px-4 py-2 rounded-lg bg-primary hover:bg-violet-600 text-white font-semibold shadow"
+       onClick={() => {
+    setEditingSolicitud(null);
+    setIsFormOpen(true);
+  }}            className="inline-flex items-center px-4 py-2 rounded-lg bg-primary hover:bg-violet-600 text-white font-semibold shadow"
           >
             <Plus className="w-4 h-4 mr-2" />
             Crear solicitud
@@ -207,12 +214,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
         </div>
       )}
 
-      <RequestFormModal
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSave={() => handleCreated()}
-        user={user}
-      />
+<RequestFormModal
+  isOpen={isFormOpen}
+  onClose={() => {
+    setIsFormOpen(false);
+    setEditingSolicitud(null);
+  }}
+  onSave={() => handleCreated()}
+  initialData={editingSolicitud}
+  user={user}
+/>
+
+
+      
     </div>
   );
 };
