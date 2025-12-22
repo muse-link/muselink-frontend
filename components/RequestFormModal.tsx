@@ -87,18 +87,29 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({
   tipo_musica: genre,
   cantidad_ofertas: maxOffers,
   fecha_evento: null as string | null,
+   presupuesto: budget, // ESTA LÍNEA
 
   // ✅ ESTA ES LA CLAVE
   presupuesto: budget,
 };
 
-      const resp = await fetch(`${API_URL}/solicitudes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+const url = initialData
+  ? `${API_URL}/solicitudes/${initialData.id}`
+  : `${API_URL}/solicitudes`;
+
+const method = initialData ? "PUT" : "POST";
+
+const resp = await fetch(url, {
+  method,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(payload),
+});
+
+
+
+      
 
       if (!resp.ok) {
         console.error("Error creando solicitud:", await resp.text());
