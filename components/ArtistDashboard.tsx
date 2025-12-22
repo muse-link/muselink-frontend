@@ -19,9 +19,16 @@ interface Solicitud {
   // backend
   desbloqueos?: string | number; // a veces viene como "1" (string)
   desbloqueada?: boolean;
+
+  // ✅ contacto desbloqueado
+  contact_name?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
+
+  // ✅ presupuesto
+  presupuesto?: number | string | null;
 }
+
 
 interface ArtistDashboardProps {
   user: User;
