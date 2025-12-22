@@ -79,14 +79,18 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({
     setIsSaving(true);
 
     try {
+
       const payload = {
-        cliente_id: Number(user.id),
-        titulo: title,
-        descripcion: description,
-        tipo_musica: genre,
-        cantidad_ofertas: maxOffers,
-        fecha_evento: null as string | null,
-      };
+  cliente_id: Number(user.id),
+  titulo: title,
+  descripcion: description,
+  tipo_musica: genre,
+  cantidad_ofertas: maxOffers,
+  fecha_evento: null as string | null,
+
+  // ✅ ESTA ES LA CLAVE
+  presupuesto: budget,
+};
 
       const resp = await fetch(`${API_URL}/solicitudes`, {
         method: "POST",
