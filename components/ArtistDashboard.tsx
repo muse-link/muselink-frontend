@@ -221,7 +221,10 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({ user, onUpdate
 
                 <div className="text-slate-300 text-sm flex items-center">
                   <DollarSign className="w-4 h-4 mr-1 text-green-400" />
-                  Presupuesto: a negociar
+                   Presupuesto:{" "}
+                   {s.presupuesto !== null && s.presupuesto !== undefined && s.presupuesto !== ""
+                   ? `$ ${Number(s.presupuesto).toLocaleString("es-CL")}`
+                    : "a negociar"}
                 </div>
 
                 <div className="text-sm text-slate-400">
@@ -232,25 +235,38 @@ export const ArtistDashboard: React.FC<ArtistDashboardProps> = ({ user, onUpdate
                 </div>
 
                 {/* ✅ CONTACTO DESBLOQUEADO */}
-                {contactoDisponible && (
-                  <div className="mt-3 bg-slate-900 border border-emerald-600 rounded-lg p-3 text-sm text-emerald-100">
-                    <div className="flex items-center mb-1">
-                      <Info className="w-4 h-4 mr-1 text-emerald-300" />
-                      <span className="font-semibold">Datos de contacto desbloqueados</span>
-                    </div>
 
-                    <p>
-                      <span className="font-semibold">Email: </span>
-                      {s.contact_email}
-                    </p>
-                    {s.contact_phone && (
-                      <p>
-                        <span className="font-semibold">Teléfono: </span>
-                        {s.contact_phone}
-                      </p>
-                    )}
-                  </div>
-                )}
+{contactoDisponible && (
+  <div className="mt-3 bg-slate-900 border border-emerald-600 rounded-lg p-3 text-sm text-emerald-100">
+    <div className="flex items-center mb-1">
+      <Info className="w-4 h-4 mr-1 text-emerald-300" />
+      <span className="font-semibold">Datos de contacto desbloqueados</span>
+    </div>
+
+    {s.contact_name && (
+      <p>
+        <span className="font-semibold">Nombre: </span>
+        {s.contact_name}
+      </p>
+    )}
+
+    <p>
+      <span className="font-semibold">Email: </span>
+      {s.contact_email}
+    </p>
+
+    {s.contact_phone && (
+      <p>
+        <span className="font-semibold">Teléfono: </span>
+        {s.contact_phone}
+      </p>
+    )}
+  </div>
+)}
+
+
+
+                
 
                 {/* Botón */}
                 <button
